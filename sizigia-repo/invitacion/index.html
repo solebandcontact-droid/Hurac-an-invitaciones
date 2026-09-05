@@ -208,7 +208,6 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 const GOOGLE_FORM_ACTION = "https://docs.google.com/forms/d/e/1FAIpQLSfcn-bteA7n46lkeLuUuPxRlQdC-DhWJnUvGP1tNJsHib4uHA/formResponse";
 const ENTRY_NOMBRE = "entry.1138576823";
@@ -281,21 +280,130 @@ form.addEventListener('submit', async (e) => {
 });
 
 document.getElementById('btn-save').addEventListener('click', async function(){
-  const node = document.getElementById('capture-area');
   const btnSave = this;
   btnSave.textContent = 'Generando...';
   try {
-    const canvas = await html2canvas(node, { backgroundColor: '#080a08', scale: 2, useCORS: true });
+    const dataUrl = await generateTicketImage();
     const link = document.createElement('a');
     const nombre = (document.getElementById('nombre-display').textContent || 'invitacion').replace(/\s+/g,'-').toLowerCase();
     link.download = 'sole-huracan-' + nombre + '.png';
-    link.href = canvas.toDataURL('image/png');
+    link.href = dataUrl;
     link.click();
     btnSave.textContent = 'Guardar imagen';
   } catch(err) {
+    console.error('Error generando ticket:', err);
     btnSave.textContent = 'No se pudo — captura de pantalla';
   }
 });
+
+async function generateTicketImage() {
+  // Espera a que las fuentes web estén listas antes de dibujar texto
+  await document.fonts.ready;
+  try {
+    await Promise.all([
+      document.fonts.load('italic 68px "Cormorant Garamond"'),
+      document.fonts.load('20px "Cormorant Garamond"'),
+      document.fonts.load('130px "Permanent Marker"')
+    ]);
+  } catch(e) {}
+
+  const bandImg = document.querySelector('.photo-wrap img.bg');
+  const logoImg = document.querySelector('.photo-top img.logo');
+  const nombreTexto = document.getElementById('nombre-display').textContent || 'Nombre del invitado';
+
+  const W = 960;
+  const photoH = 1280;
+  const overlap = 36;
+  const padX = 44;
+
+  // Canvas temporal alto de sobra; se recorta al final a la altura real usada
+  const MAX_H = 2200;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = MAX_H;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#080a08';
+  ctx.fillRect(0, 0, W, MAX_H);
+
+  // Foto (recorte equivalente a top:-4% del CSS)
+  const srcY = 0.04 * bandImg.naturalHeight;
+  const srcH = photoH * (bandImg.naturalWidth / W);
+  ctx.drawImage(bandImg, 0, srcY, bandImg.naturalWidth, srcH, 0, 0, W, photoH);
+
+  // Degradado sobre la foto
+  const grad = ctx.createLinearGradient(0, 0, 0, photoH);
+  grad.addColorStop(0, 'rgba(8,10,8,0.72)');
+  grad.addColorStop(0.22, 'rgba(8,10,8,0.10)');
+  grad.addColorStop(0.62, 'rgba(8,10,8,0.08)');
+  grad.addColorStop(0.90, 'rgba(8,10,8,0.72)');
+  grad.addColorStop(1, '#080a08');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, photoH);
+
+  // Logo + etiqueta superior
+  const logoW = 176;
+  const logoH = logoImg.naturalHeight * (logoW / logoImg.naturalWidth);
+  ctx.drawImage(logoImg, padX, 40, logoW, logoH);
+
+  ctx.fillStyle = '#ddd8c8';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  setFont(ctx, '20px "Cormorant Garamond"', 3);
+  ctx.fillText('INVITACIÓN PERSONAL', W - padX, 48);
+
+  // Bloque de texto debajo de la foto
+  let y = photoH - overlap + 46;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+
+  ctx.fillStyle = '#c98494';
+  setFont(ctx, '20px "Cormorant Garamond"', 6);
+  ctx.fillText('PARA', padX, y);
+
+  y += 62;
+  ctx.fillStyle = '#f2ede2';
+  setFont(ctx, 'italic 68px "Cormorant Garamond"', 0);
+  ctx.fillText(nombreTexto, padX, y);
+
+  y += 50;
+  ctx.strokeStyle = 'rgba(221,216,200,0.3)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(padX, y);
+  ctx.lineTo(W - padX, y);
+  ctx.stroke();
+
+  y += 46;
+  ctx.fillStyle = '#c98494';
+  setFont(ctx, '19px "Cormorant Garamond"', 5);
+  ctx.fillText('LANZAMIENTO DEL SENCILLO', padX, y);
+
+  y += 96;
+  ctx.fillStyle = '#f2ede2';
+  setFont(ctx, '128px "Permanent Marker"', 0);
+  ctx.fillText('HURACÁN', padX, y);
+
+  y += 62;
+  setFont(ctx, 'italic 38px "Cormorant Garamond"', 0);
+  ctx.fillText('Lanzamiento en vivo · Solé', padX, y);
+
+  y += 40; // margen inferior de respiro
+
+  // Recorta el canvas final a la altura realmente usada
+  const finalH = Math.min(y, MAX_H);
+  const finalCanvas = document.createElement('canvas');
+  finalCanvas.width = W;
+  finalCanvas.height = finalH;
+  finalCanvas.getContext('2d').drawImage(canvas, 0, 0, W, finalH, 0, 0, W, finalH);
+
+  return finalCanvas.toDataURL('image/png');
+}
+
+function setFont(ctx, font, letterSpacingPx) {
+  ctx.font = font;
+  try { ctx.letterSpacing = letterSpacingPx + 'px'; } catch(e) {}
+}
 </script>
 </body>
 </html>
