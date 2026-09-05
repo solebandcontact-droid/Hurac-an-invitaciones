@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>SIZIGIA — Control de acceso</title>
+<style>
+  :root{
+    --bg:#080A08;
+    --panel:#111310;
+    --border:#2a2c28;
+    --cream:#DDD8C8;
+    --copper:#C97A4A;
+    --oxide:#9A5030;
+    --green:#4A6840;
+    --muted:#8a8a82;
+    --danger:#c05050;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family: Georgia, 'Cormorant Garamond', serif;
+    background: var(--bg);
+    color: var(--cream);
+    min-height:100vh;
+  }
+  .wrap{ max-width:720px; margin:0 auto; padding:24px 16px 60px; }
+  h1{
+    text-align:center;
+    letter-spacing:4px;
+    font-weight:400;
+    font-size:28px;
+    margin:8px 0 2px;
+    color: var(--cream);
+  }
+  .sub{
+    text-align:center;
+    color: var(--copper);
+    font-style:italic;
+    font-size:14px;
+    margin:0 0 24px;
+  }
+  .tabs{
+    display:flex;
+    gap:8px;
+    margin-bottom:20px;
+    border-bottom:1px solid var(--border);
+  }
+  .tab{
+    flex:1;
+    text-align:center;
+    padding:10px 4px;
+    cursor:pointer;
+    color: var(--muted);
+    border-bottom:2px solid transparent;
+    font-size:14px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+  }
+  .tab.active{ color: var(--copper); border-bottom-color: var(--copper); }
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+  .card{
+    background: var(--panel);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:16px;
+    margin-bottom:14px;
+  }
+  input[type=text]{
+    width:100%;
+    background:#0d0f0c;
+    border:1px solid var(--border);
+    color: var(--cream);
+    padding:10px 12px;
+    border-radius:4px;
+    font-size:15px;
+    font-family: inherit;
+  }
+  button{
+    font-family: inherit;
+    cursor:pointer;
+    border-radius:4px;
+    border:1px solid var(--copper);
+    background:transparent;
+    color: var(--copper);
+    padding:10px 16px;
+    font-size:14px;
+    letter-spacing:0.5px;
+  }
+  button:hover{ background: rgba(201,122,74,0.12); }
+  button.primary{ background: var(--copper); color: var(--bg); font-weight:bold; }
+  button.primary:hover{ background: var(--oxide); }
+  button.small{ padding:6px 10px; font-size:12px; }
+  .row{ display:flex; gap:8px; align-items:center; }
+  .guest-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:10px 0;
+    border-bottom:1px solid var(--border);
+    gap:10px;
+  }
+  .guest-item:last-child{ border-bottom:none; }
+  .guest-name{ font-size:15px; }
+  .guest-code{ font-size:11px; color: var(--muted); letter-spacing:1px; }
+  .badge{
+    font-size:11px;
+    padding:2px 8px;
+    border-radius:10px;
+    letter-spacing:0.5px;
+  }
+  .badge.pending{ background:rgba(138,138,130,0.2); color: var(--muted); }
+  .badge.checked{ background:rgba(74,104,64,0.3); color:#9ecf8a; }
+  .qr-modal-bg{
+    display:none;
+    position:fixed; inset:0;
+    background:rgba(0,0,0,0.75);
+    align-items:center; justify-content:center;
+    z-index:50;
+    padding:20px;
+  }
+  .qr-modal-bg.open{ display:flex; }
+  .qr-modal{
+    background: var(--panel);
+    border:1px solid var(--copper);
+    border-radius:8px;
+    padding:20px;
+    text-align:center;
+    max-width:320px;
+    width:100%;
+  }
+  .qr-modal img, .qr-modal canvas{ background:white; padding:10px; border-radius:6px; }
+  #video{ width:100%; border-radius:6px; border:1px solid var(--border); background:#000; }
+  #scan-canvas{ display:none; }
+  .result{
+    margin-top:14px;
+    padding:14px;
+    border-radius:6px;
+    text-align:center;
+    font-size:16px;
+    display:none;
+  }
+  .result.ok{ background:rgba(74,104,64,0.25); border:1px solid var(--green); display:block; }
+  .result.dup{ background:rgba(201,122,74,0.2); border:1px solid var(--copper); display:block; }
+  .result.err{ background:rgba(192,80,80,0.2); border:1px solid var(--danger); display:block; }
+  .counts{ display:flex; gap:10px; margin-bottom:16px; }
+  .count-box{
+    flex:1;
+    text-align:center;
+    background: var(--panel);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:10px 4px;
+  }
+  .count-box .num{ font-size:22px; color: var(--copper); }
+  .count-box .lbl{ font-size:11px; color: var(--muted); text-transform:uppercase; letter-spacing:1px; }
+  .hint{ font-size:12px; color: var(--muted); margin-top:6px; }
+  .empty{ color: var(--muted); font-size:14px; text-align:center; padding:20px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>SIZIGIA</h1>
+  <p class="sub">control de acceso · Solé</p>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="invitados">Invitados</div>
+    <div class="tab" data-tab="acceso">Control de acceso</div>
+  </div>
+
+  <div class="panel active" id="panel-invitados">
+    <div class="counts">
+      <div class="count-box"><div class="num" id="count-total">0</div><div class="lbl">invitados</div></div>
+      <div class="count-box"><div class="num" id="count-checked">0</div><div class="lbl">check-in</div></div>
+      <div class="count-box"><div class="num" id="count-pending">0</div><div class="lbl">pendientes</div></div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <input type="text" id="new-guest-name" placeholder="Nombre del invitado">
+        <button class="primary" id="btn-add-guest">Agregar</button>
+      </div>
+      <p class="hint" id="add-error" style="color:var(--danger); display:none;"></p>
+    </div>
+
+    <div class="card" id="guest-list-card">
+      <div id="guest-list"></div>
+      <div class="empty" id="guest-empty">Aún no hay invitados. Agrega el primero arriba.</div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-acceso">
+    <div class="card">
+      <p class="hint" style="margin-top:0;">Escanea el QR del invitado o escribe su código manualmente si la cámara no está disponible.</p>
+      <button class="primary" id="btn-start-camera">Iniciar cámara</button>
+      <button class="small" id="btn-stop-camera" style="display:none;">Detener</button>
+      <video id="video" playsinline style="display:none; margin-top:10px;"></video>
+      <canvas id="scan-canvas"></canvas>
+      <div class="row" style="margin-top:14px;">
+        <input type="text" id="manual-code" placeholder="Código manual, ej. SIZIGIA-003">
+        <button id="btn-manual-check">Verificar</button>
+      </div>
+      <div class="result" id="scan-result"></div>
+    </div>
+
+    <div class="card">
+      <p class="hint" style="margin-top:0; margin-bottom:8px;">Últimos check-in</p>
+      <div id="recent-checkins"></div>
+      <div class="empty" id="recent-empty">Sin registros todavía.</div>
+    </div>
+  </div>
+
+  <div class="qr-modal-bg" id="qr-modal-bg">
+    <div class="qr-modal">
+      <p id="qr-modal-name" style="font-size:16px; margin:0 0 4px;"></p>
+      <p id="qr-modal-code" style="font-size:12px; color:var(--muted); margin:0 0 12px;"></p>
+      <div id="qr-render"></div>
+      <div class="row" style="margin-top:14px; justify-content:center;">
+        <button class="small" id="btn-download-qr">Descargar</button>
+        <button class="small" id="btn-close-qr">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<script>
+const STORAGE_KEY = "sizigia_guests_v1";
+let guests = [];
+let currentStream = null;
+let scanLoopActive = false;
+
+function pad3(n){ return String(n).padStart(3,'0'); }
+
+async function loadGuests(){
+  try{
+    const res = await window.storage.get(STORAGE_KEY, true);
+    guests = res && res.value ? JSON.parse(res.value) : [];
+  }catch(e){
+    guests = [];
+  }
+  renderGuests();
+  renderRecent();
+}
+
+async function saveGuests(){
+  try{
+    await window.storage.set(STORAGE_KEY, JSON.stringify(guests), true);
+  }catch(e){
+    console.error("No se pudo guardar", e);
+  }
+}
+
+function nextCode(){
+  let maxN = 0;
+  guests.forEach(g=>{
+    const m = g.code.match(/SIZIGIA-(\d+)/);
+    if(m) maxN = Math.max(maxN, parseInt(m[1],10));
+  });
+  return "SIZIGIA-" + pad3(maxN+1);
+}
+
+function renderGuests(){
+  const list = document.getElementById('guest-list');
+  const empty = document.getElementById('guest-empty');
+  list.innerHTML = '';
+  if(guests.length===0){ empty.style.display='block'; }
+  else{ empty.style.display='none'; }
+
+  guests.slice().reverse().forEach(g=>{
+    const item = document.createElement('div');
+    item.className = 'guest-item';
+    item.innerHTML = `
+      <div>
+        <div class="guest-name">${escapeHtml(g.name)}</div>
+        <div class="guest-code">${g.code}</div>
+      </div>
+      <div class="row">
+        <span class="badge ${g.checkedIn ? 'checked':'pending'}">${g.checkedIn ? 'Check-in':'Pendiente'}</span>
+        <button class="small" data-qr="${g.code}">Ver QR</button>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+
+  document.querySelectorAll('[data-qr]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openQrModal(btn.getAttribute('data-qr')));
+  });
+
+  document.getElementById('count-total').textContent = guests.length;
+  document.getElementById('count-checked').textContent = guests.filter(g=>g.checkedIn).length;
+  document.getElementById('count-pending').textContent = guests.filter(g=>!g.checkedIn).length;
+}
+
+function renderRecent(){
+  const wrap = document.getElementById('recent-checkins');
+  const empty = document.getElementById('recent-empty');
+  const checked = guests.filter(g=>g.checkedIn).sort((a,b)=> (b.checkinTime||'').localeCompare(a.checkinTime||'')).slice(0,8);
+  wrap.innerHTML = '';
+  if(checked.length===0){ empty.style.display='block'; } else { empty.style.display='none'; }
+  checked.forEach(g=>{
+    const row = document.createElement('div');
+    row.className = 'guest-item';
+    const t = g.checkinTime ? new Date(g.checkinTime).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) : '';
+    row.innerHTML = `<div class="guest-name">${escapeHtml(g.name)}</div><div class="guest-code">${t}</div>`;
+    wrap.appendChild(row);
+  });
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+document.getElementById('btn-add-guest').addEventListener('click', async ()=>{
+  const input = document.getElementById('new-guest-name');
+  const errEl = document.getElementById('add-error');
+  const name = input.value.trim();
+  if(!name){
+    errEl.textContent = 'Escribe un nombre primero';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+  const guest = { code: nextCode(), name, checkedIn:false, checkinTime:null };
+  guests.push(guest);
+  await saveGuests();
+  input.value = '';
+  renderGuests();
+  openQrModal(guest.code);
+});
+
+document.getElementById('new-guest-name').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') document.getElementById('btn-add-guest').click();
+});
+
+function openQrModal(code){
+  const g = guests.find(x=>x.code===code);
+  if(!g) return;
+  document.getElementById('qr-modal-name').textContent = g.name;
+  document.getElementById('qr-modal-code').textContent = g.code;
+  const renderDiv = document.getElementById('qr-render');
+  renderDiv.innerHTML = '';
+  new QRCode(renderDiv, { text: g.code, width:200, height:200, colorDark:"#080A08", colorLight:"#ffffff" });
+  document.getElementById('qr-modal-bg').classList.add('open');
+  document.getElementById('btn-download-qr').onclick = ()=>{
+    setTimeout(()=>{
+      const canvas = renderDiv.querySelector('canvas');
+      const img = renderDiv.querySelector('img');
+      const src = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+      if(src){
+        const a = document.createElement('a');
+        a.href = src;
+        a.download = `${g.code}_${g.name.replace(/\s+/g,'_')}.png`;
+        a.click();
+      }
+    }, 150);
+  };
+}
+document.getElementById('btn-close-qr').addEventListener('click', ()=>{
+  document.getElementById('qr-modal-bg').classList.remove('open');
+});
+
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-'+tab.dataset.tab).classList.add('active');
+    if(tab.dataset.tab !== 'acceso'){ stopCamera(); }
+  });
+});
+
+async function processCode(code){
+  const resultEl = document.getElementById('scan-result');
+  code = (code||'').trim().toUpperCase();
+  await loadGuests();
+  const g = guests.find(x=>x.code === code);
+  if(!g){
+    resultEl.className = 'result err';
+    resultEl.textContent = `Código no encontrado: ${code}`;
+    return;
+  }
+  if(g.checkedIn){
+    resultEl.className = 'result dup';
+    resultEl.textContent = `Ya registrado: ${g.name} (${new Date(g.checkinTime).toLocaleTimeString('es-CO')})`;
+    return;
+  }
+  g.checkedIn = true;
+  g.checkinTime = new Date().toISOString();
+  await saveGuests();
+  resultEl.className = 'result ok';
+  resultEl.textContent = `Bienvenido/a ${g.name}`;
+  renderGuests();
+  renderRecent();
+}
+
+document.getElementById('btn-manual-check').addEventListener('click', ()=>{
+  const val = document.getElementById('manual-code').value;
+  if(!val.trim()){
+    const resultEl = document.getElementById('scan-result');
+    resultEl.className = 'result err';
+    resultEl.textContent = 'Escribe un código primero';
+    return;
+  }
+  processCode(val);
+  document.getElementById('manual-code').value = '';
+});
+document.getElementById('manual-code').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') document.getElementById('btn-manual-check').click();
+});
+
+async function startCamera(){
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('scan-canvas');
+  try{
+    currentStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    video.srcObject = currentStream;
+    video.style.display = 'block';
+    await video.play();
+    document.getElementById('btn-start-camera').style.display = 'none';
+    document.getElementById('btn-stop-camera').style.display = 'inline-block';
+    scanLoopActive = true;
+    requestAnimationFrame(scanLoop);
+  }catch(e){
+    const resultEl = document.getElementById('scan-result');
+    resultEl.className = 'result err';
+    resultEl.textContent = 'No se pudo acceder a la cámara. Usa el código manual abajo.';
+  }
+}
+
+function stopCamera(){
+  scanLoopActive = false;
+  if(currentStream){
+    currentStream.getTracks().forEach(t=>t.stop());
+    currentStream = null;
+  }
+  document.getElementById('video').style.display = 'none';
+  document.getElementById('btn-start-camera').style.display = 'inline-block';
+  document.getElementById('btn-stop-camera').style.display = 'none';
+}
+
+let lastScanTime = 0;
+function scanLoop(){
+  if(!scanLoopActive) return;
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('scan-canvas');
+  if(video.readyState === video.HAVE_ENOUGH_DATA){
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0,0,canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    const now = Date.now();
+    if(code && (now - lastScanTime > 2500)){
+      lastScanTime = now;
+      processCode(code.data);
+    }
+  }
+  requestAnimationFrame(scanLoop);
+}
+
+document.getElementById('btn-start-camera').addEventListener('click', startCamera);
+document.getElementById('btn-stop-camera').addEventListener('click', stopCamera);
+
+loadGuests();
+setInterval(loadGuests, 6000);
+</script>
+</body>
+</html>
